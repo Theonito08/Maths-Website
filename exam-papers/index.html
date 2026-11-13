@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>Question Papers & Mark Schemes</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Exam Papers & Mark Schemes</h1>
+      <p>Download practice question papers and official mark schemes below.</p>
+    </header>
+
+    <!-- Search and Year Filter Grid -->
+    <div class="grid">
+      <input type="search" id="searchInput" placeholder="Search by subject or topic..." aria-label="Search papers">
+      <select id="yearFilter" aria-label="Filter by year">
+        <option value="">All Years</option>
+        <option value="2026">2026</option>
+        <option value="2025">2025</option>
+      </select>
+    </div>
+
+    <figure>
+      <table id="papersTable" class="striped">
+        <thead>
+          <tr>
+            <th scope="col">Subject / Topic</th>
+            <th scope="col">Year</th>
+            <th scope="col">Question Paper</th>
+            <th scope="col">Mark Scheme</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>AS Core Pure</td>
+            <td>2026</td>
+            <td><a href="papers/AS-Core-Pure-Practice.pdf" target="_blank" role="button" class="outline">Download QP</a></td>
+            <td><a href="papers/AS-Core-Pure-Mark-Scheme.pdf" target="_blank" role="button" class="outline secondary">Download MS</a></td>
+          </tr>
+          <tr>
+            <td>AS Modelling with Algorithms</td>
+            <td>2026</td>
+            <td><a href="papers/AS-MWA-Practice.pdf" target="_blank" role="button" class="outline">Download QP</a></td>
+            <td><a href="papers/AS-MWA-Mark-Scheme.pdf" target="_blank" role="button" class="outline secondary">Download MS</a></td>
+          </tr>
+          <tr>
+            <td>AS Statistics</td>
+            <td>2025</td>
+            <td><a href="papers/AS-Statistics-Practice.pdf" target="_blank" role="button" class="outline">Download QP</a></td>
+            <td><a href="papers/AS-Statistics-Mark-Scheme.pdf" target="_blank" role="button" class="outline secondary">Download MS</a></td>
+          </tr>
+          <tr id="noResults" style="display: none;">
+            <td colspan="4"><em>No matching exam papers found.</em></td>
+          </tr>
+        </tbody>
+      </table>
+    </figure>
+  </main>
+
+  <script>
+    const searchInput = document.getElementById('searchInput');
+    const yearFilter = document.getElementById('yearFilter');
+    const tableRows = document.querySelectorAll('#papersTable tbody tr:not(#noResults)');
+    const noResults = document.getElementById('noResults');
+
+    function filterTable() {
+      const searchText = searchInput.value.toLowerCase();
+      const selectedYear = yearFilter.value;
+      let visibleCount = 0;
+
+      tableRows.forEach(row => {
+        const topic = row.cells[0].textContent.toLowerCase();
+        const year = row.cells[1].textContent.trim();
+        
+        const matchesSearch = topic.includes(searchText);
+        const matchesYear = selectedYear === '' || year === selectedYear;
+
+        if (matchesSearch && matchesYear) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+
+      noResults.style.display = visibleCount === 0 ? '' : 'none';
+    }
+
+    searchInput.addEventListener('input', filterTable);
+    yearFilter.addEventListener('change', filterTable);
+  </script>
+</body>
+</html>
