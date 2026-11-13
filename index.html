@@ -6,24 +6,34 @@
   <meta name="color-scheme" content="light dark">
   <title>Question Papers & Mark Schemes</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <main class="container">
     <header>
-      <h1>Exam Papers & Mark Schemes</h1>
+      <nav>
+        <ul>
+          <li>
+            <h1 style="margin-bottom: 0;">Exam Papers & Mark Schemes</h1>
+          </li>
+        </ul>
+        <ul id="adminControls" style="display: none;">
+          <li><button class="contrast" onclick="openUploadModal()">+ Add Paper</button></li>
+          <li><button class="secondary outline" onclick="logout()">Logout</button></li>
+        </ul>
+      </nav>
       <p>Download practice question papers and official mark schemes below.</p>
     </header>
 
-    <!-- Search and Year Filter Grid -->
+   
     <div class="grid">
       <input type="search" id="searchInput" placeholder="Search by subject or topic..." aria-label="Search papers">
       <select id="yearFilter" aria-label="Filter by year">
         <option value="">All Years</option>
-        <option value="2026">2026</option>
-        <option value="2025">2025</option>
       </select>
     </div>
 
+    
     <figure>
       <table id="papersTable" class="striped">
         <thead>
@@ -32,66 +42,205 @@
             <th scope="col">Year</th>
             <th scope="col">Question Paper</th>
             <th scope="col">Mark Scheme</th>
+            <th scope="col" class="admin-col" style="display: none;">Actions</th>
           </tr>
         </thead>
-        <tbody>
-          <tr>
-            <td>AS Core Pure</td>
-            <td>2026</td>
-            <td><a href="papers/AS-Core-Pure-Practice.pdf" target="_blank" role="button" class="outline">Download QP</a></td>
-            <td><a href="papers/AS-Core-Pure-Mark-Scheme.pdf" target="_blank" role="button" class="outline secondary">Download MS</a></td>
-          </tr>
-          <tr>
-            <td>AS Modelling with Algorithms</td>
-            <td>2026</td>
-            <td><a href="papers/AS-MWA-Practice.pdf" target="_blank" role="button" class="outline">Download QP</a></td>
-            <td><a href="papers/AS-MWA-Mark-Scheme.pdf" target="_blank" role="button" class="outline secondary">Download MS</a></td>
-          </tr>
-          <tr>
-            <td>AS Statistics</td>
-            <td>2025</td>
-            <td><a href="papers/AS-Statistics-Practice.pdf" target="_blank" role="button" class="outline">Download QP</a></td>
-            <td><a href="papers/AS-Statistics-Mark-Scheme.pdf" target="_blank" role="button" class="outline secondary">Download MS</a></td>
-          </tr>
-          <tr id="noResults" style="display: none;">
-            <td colspan="4"><em>No matching exam papers found.</em></td>
-          </tr>
+        <tbody id="tableBody">
+          <tr><td colspan="5" aria-busy="true">Loading papers...</td></tr>
         </tbody>
       </table>
     </figure>
+
+    <footer style="margin-top: 3rem; text-align: right;">
+      <small><a href="#" id="loginLink" onclick="document.getElementById('loginModal').showModal(); return false;">Admin Login</a></small>
+    </footer>
   </main>
 
+  <dialog id="loginModal">
+    <article>
+      <header>
+        <button aria-label="Close" rel="prev" onclick="document.getElementById('loginModal').close()"></button>
+        <strong>Admin Login</strong>
+      </header>
+      <form id="loginForm">
+        <label>Email <input type="email" id="adminEmail" required></label>
+        <label>Password <input type="password" id="adminPassword" required></label>
+        <p id="loginError" style="color: var(--pico-del-color); display: none;"></p>
+        <button type="submit" id="loginBtn">Log In</button>
+      </form>
+    </article>
+  </dialog>
+
+
+  <dialog id="uploadModal">
+    <article>
+      <header>
+        <button aria-label="Close" rel="prev" onclick="document.getElementById('uploadModal').close()"></button>
+        <strong>Add New Exam Paper</strong>
+      </header>
+      <form id="uploadForm">
+        <div class="grid">
+          <label>Subject / Topic
+            <input type="text" id="topicInput" required>
+          </label>
+          <label>Year
+            <input type="text" id="yearInput" required>
+          </label>
+        </div>
+        <label>Question Paper (PDF)
+          <input type="file" id="qpFile" accept="application/pdf" required>
+        </label>
+        <label>Mark Scheme (PDF - Optional)
+          <input type="file" id="msFile" accept="application/pdf">
+        </label>
+        <button type="submit" id="uploadBtn">Upload & Publish</button>
+      </form>
+    </article>
+  </dialog>
+
   <script>
-    const searchInput = document.getElementById('searchInput');
+    const SUPABASE_URL = 'https://vhhnoimrtcsrjquacucw.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_Hz9k6LYylv_4cXpiqfcu9Q_z0zEEi23';
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let allPapers = [];
+    let isAdmin = false;
+
+    const tableBody = document.getElementById('tableBody');
     const yearFilter = document.getElementById('yearFilter');
-    const tableRows = document.querySelectorAll('#papersTable tbody tr:not(#noResults)');
-    const noResults = document.getElementById('noResults');
+    const searchInput = document.getElementById('searchInput');
 
-    function filterTable() {
-      const searchText = searchInput.value.toLowerCase();
-      const selectedYear = yearFilter.value;
-      let visibleCount = 0;
-
-      tableRows.forEach(row => {
-        const topic = row.cells[0].textContent.toLowerCase();
-        const year = row.cells[1].textContent.trim();
-        
-        const matchesSearch = topic.includes(searchText);
-        const matchesYear = selectedYear === '' || year === selectedYear;
-
-        if (matchesSearch && matchesYear) {
-          row.style.display = '';
-          visibleCount++;
-        } else {
-          row.style.display = 'none';
-        }
-      });
-
-      noResults.style.display = visibleCount === 0 ? '' : 'none';
+    async function checkAuth() {
+      const { data: { session } } = await sb.auth.getSession();
+      isAdmin = !!session;
+      document.getElementById('adminControls').style.display = isAdmin ? 'flex' : 'none';
+      document.getElementById('loginLink').style.display = isAdmin ? 'none' : 'inline';
+      document.querySelectorAll('.admin-col').forEach(el => el.style.display = isAdmin ? '' : 'none');
+      renderTable();
     }
 
-    searchInput.addEventListener('input', filterTable);
-    yearFilter.addEventListener('change', filterTable);
+    async function loadPapers() {
+      const { data, error } = await sb.from('papers').select('*').order('id', { ascending: false });
+      if (error) {
+        tableBody.innerHTML = `<tr><td colspan="5">Error loading papers. Check your Supabase keys.</td></tr>`;
+        return;
+      }
+      allPapers = data;
+      updateYearDropdown();
+      renderTable();
+    }
+
+    function updateYearDropdown() {
+      const currentVal = yearFilter.value;
+      const years = [...new Set(allPapers.map(p => p.year))].sort().reverse();
+      yearFilter.innerHTML = '<option value="">All Years</option>' + 
+        years.map(y => `<option value="${y}">${y === '0000' ? 'No Year' : y}</option>`).join('');
+      yearFilter.value = currentVal;
+    }
+
+    function renderTable() {
+      const search = searchInput.value.toLowerCase();
+      const selectedYear = yearFilter.value;
+
+      const filtered = allPapers.filter(p =>
+        p.topic.toLowerCase().includes(search) &&
+        (selectedYear === '' || p.year === selectedYear)
+      );
+
+      if (filtered.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="${isAdmin ? 5 : 4}"><em>No matching exam papers found.</em></td></tr>`;
+        return;
+      }
+
+      tableBody.innerHTML = filtered.map(p => `
+        <tr>
+          <td>${p.topic}</td>
+          <td>${p.year === '0000' ? '' : p.year}</td>
+          <td>${p.qp_url ? `<a href="${p.qp_url}" target="_blank" rel="noopener" role="button" class="outline">Download QP</a>` : '—'}</td>
+          <td>${p.ms_url ? `<a href="${p.ms_url}" target="_blank" rel="noopener" role="button" class="outline secondary">Download MS</a>` : '—'}</td>
+          ${isAdmin ? `<td><button class="outline contrast" style="padding: 0.3rem 0.6rem;" onclick="deletePaper('${p.id}')">Delete</button></td>` : ''}
+        </tr>
+      `).join('');
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn');
+      const errEl = document.getElementById('loginError');
+      btn.setAttribute('aria-busy', 'true');
+      errEl.style.display = 'none';
+
+      const { error } = await sb.auth.signInWithPassword({
+        email: document.getElementById('adminEmail').value,
+        password: document.getElementById('adminPassword').value
+      });
+
+      btn.removeAttribute('aria-busy');
+      if (error) {
+        errEl.textContent = error.message;
+        errEl.style.display = 'block';
+      } else {
+        document.getElementById('loginModal').close();
+        checkAuth();
+      }
+    });
+
+    async function logout() {
+      await sb.auth.signOut();
+      checkAuth();
+    }
+
+    function openUploadModal() {
+      document.getElementById('uploadForm').reset();
+      document.getElementById('uploadModal').showModal();
+    }
+
+    async function uploadPdfFile(file) {
+      if (!file) return '';
+      const cleanName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const { error } = await sb.storage.from('pdfs').upload(cleanName, file);
+      if (error) throw error;
+      const { data } = sb.storage.from('pdfs').getPublicUrl(cleanName);
+      return data.publicUrl;
+    }
+
+    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('uploadBtn');
+      btn.setAttribute('aria-busy', 'true');
+
+      try {
+        const topic = document.getElementById('topicInput').value;
+        const year = document.getElementById('yearInput').value;
+        const qpFile = document.getElementById('qpFile').files[0];
+        const msFile = document.getElementById('msFile').files[0];
+
+        const qpUrl = await uploadPdfFile(qpFile);
+        const msUrl = await uploadPdfFile(msFile);
+
+        const { error } = await sb.from('papers').insert([{ topic, year, qp_url: qpUrl, ms_url: msUrl }]);
+        if (error) throw error;
+
+        document.getElementById('uploadModal').close();
+        await loadPapers();
+      } catch (err) {
+        alert('Upload failed: ' + err.message);
+      } finally {
+        btn.removeAttribute('aria-busy');
+      }
+    });
+
+    async function deletePaper(id) {
+      if (!confirm('Remove this paper from the site?')) return;
+      await sb.from('papers').delete().eq('id', id);
+      await loadPapers();
+    }
+
+    searchInput.addEventListener('input', renderTable);
+    yearFilter.addEventListener('change', renderTable);
+
+    checkAuth();
+    loadPapers();
   </script>
 </body>
 </html>
